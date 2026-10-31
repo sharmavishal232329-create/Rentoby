@@ -2,7 +2,7 @@
 // Production: PostgreSQL | Local Development: SQLite compatible
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
