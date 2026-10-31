@@ -1,0 +1,283 @@
+// Prisma Schema for Rentoby Marketplace
+// Production: PostgreSQL | Local Development: SQLite compatible
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String?
+  city         String    @default("Bengaluru")
+  localArea    String    @default("Koramangala")
+  avatarUrl    String?
+  bio          String?
+  role         String    @default("USER") // "USER" | "ADMIN"
+  isVerified   Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  listings                Listing[]
+  services                Service[]
+  bookingsAsRenter        Booking[]        @relation("RenterBookings")
+  bookingsAsOwner         Booking[]        @relation("OwnerBookings")
+  serviceBookingsAsCustomer ServiceBooking[] @relation("CustomerServiceBookings")
+  serviceBookingsAsProvider ServiceBooking[] @relation("ProviderServiceBookings")
+  sentMessages            Message[]        @relation("SentMessages")
+  receivedMessages        Message[]        @relation("ReceivedMessages")
+  reviewsGiven            Review[]         @relation("AuthoredReviews")
+  reviewsReceived         Review[]         @relation("TargetReviews")
+  favorites               Favorite[]
+  notifications           Notification[]
+  reportsSubmitted        Report[]         @relation("ReporterUser")
+  disputesResolved        Dispute[]        @relation("AdminDisputes")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  icon        String?
+  type        String     @default("ITEM") // "ITEM" | "SERVICE"
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Category[] @relation("CategoryHierarchy")
+  listings    Listing[]
+  services    Service[]
+  createdAt   DateTime   @default(now())
+}
+
+model Listing {
+  id                 String     @id @default(cuid())
+  title              String
+  slug               String     @unique
+  description        String
+  categoryId         String
+  category           Category   @relation(fields: [categoryId], references: [id])
+  subcategoryId      String?
+  images             String     @default("[]") // JSON array of string URLs
+  condition          String     @default("GOOD") // "NEW" | "LIKE_NEW" | "GOOD" | "FAIR"
+  priceHourly        Float?
+  priceDaily         Float
+  priceWeekly        Float?
+  securityDeposit    Float      @default(0)
+  pricingPeriod      String     @default("DAILY") // "HOURLY" | "DAILY" | "WEEKLY"
+  availabilityStatus String     @default("ACTIVE") // "ACTIVE" | "PAUSED" | "BOOKED" | "UNAVAILABLE"
+  city               String
+  localArea          String     // Approximate public locality e.g. "HSR Layout"
+  approxAddress      String     // Approximate area descriptor
+  exactAddress       String?    // Strict Confidentiality: Only revealed to confirmed renter
+  latitude           Float?     // Approximate coordinate
+  longitude          Float?     // Approximate coordinate
+  pickupAvailable    Boolean    @default(true)
+  deliveryAvailable  Boolean    @default(false)
+  deliveryFee        Float?
+  rentalRules        String?
+  cancellationPolicy String     @default("FLEXIBLE") // "FLEXIBLE" | "MODERATE" | "STRICT"
+  specs              String?    // JSON metadata (e.g. tractor HP, camera model, operator option)
+  status             String     @default("ACTIVE") // "DRAFT" | "PENDING" | "ACTIVE" | "PAUSED" | "REMOVED"
+  ownerId            String
+  owner              User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  bookings           Booking[]
+  reviews            Review[]
+  favorites          Favorite[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+}
+
+model Service {
+  id              String           @id @default(cuid())
+  title           String
+  slug            String           @unique
+  description     String
+  categoryId      String
+  category        Category         @relation(fields: [categoryId], references: [id])
+  images          String           @default("[]") // JSON array of URLs
+  hourlyRate      Float?
+  fixedRate       Float?
+  pricingType     String           @default("HOURLY") // "HOURLY" | "FIXED"
+  experienceYears Int              @default(1)
+  serviceArea     String           // e.g. "Within 15km of Koramangala"
+  city            String
+  localArea       String
+  availability    String?          // e.g. "Mon-Sat: 8 AM - 6 PM"
+  status          String           @default("ACTIVE") // "ACTIVE" | "PAUSED" | "REMOVED"
+  providerId      String
+  provider        User             @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  bookings        ServiceBooking[]
+  reviews         Review[]
+  favorites       Favorite[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Booking {
+  id                 String    @id @default(cuid())
+  listingId          String
+  listing            Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  renterId           String
+  renter             User      @relation("RenterBookings", fields: [renterId], references: [id], onDelete: Cascade)
+  ownerId            String
+  owner              User      @relation("OwnerBookings", fields: [ownerId], references: [id], onDelete: Cascade)
+  startDate          DateTime
+  endDate            DateTime
+  durationDays       Int       @default(1)
+  durationHours      Float?
+  itemTotal          Float
+  platformFee        Float
+  securityDeposit    Float     @default(0)
+  deliveryFee        Float     @default(0)
+  grandTotal         Float
+  fulfillmentType    String    @default("PICKUP") // "PICKUP" | "DELIVERY"
+  status             String    @default("PENDING") // "PENDING" | "ACCEPTED" | "REJECTED" | "PAYMENT_PENDING" | "CONFIRMED" | "ACTIVE" | "COMPLETED" | "CANCELLED" | "DISPUTED"
+  cancellationReason String?
+  payment            Payment?
+  review             Review?
+  disputes           Dispute[]
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model ServiceBooking {
+  id            String    @id @default(cuid())
+  serviceId     String
+  service       Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      User      @relation("CustomerServiceBookings", fields: [customerId], references: [id], onDelete: Cascade)
+  providerId    String
+  provider      User      @relation("ProviderServiceBookings", fields: [providerId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime
+  scheduledTime String    // e.g. "10:30 AM"
+  durationHours Float     @default(1)
+  serviceFee    Float
+  platformFee   Float
+  grandTotal    Float
+  notes         String?
+  status        String    @default("PENDING") // "PENDING" | "ACCEPTED" | "REJECTED" | "CONFIRMED" | "COMPLETED" | "CANCELLED"
+  payment       Payment?
+  review        Review?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Payment {
+  id               String          @id @default(cuid())
+  bookingId        String?         @unique
+  booking          Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  serviceBookingId String?         @unique
+  serviceBooking   ServiceBooking? @relation(fields: [serviceBookingId], references: [id], onDelete: SetNull)
+  amount           Float
+  currency         String          @default("INR")
+  provider         String          @default("RAZORPAY") // "RAZORPAY" | "STRIPE"
+  orderId          String?         @unique
+  paymentId        String?         @unique
+  signature        String?
+  status           String          @default("CREATED") // "CREATED" | "SUCCESS" | "FAILED" | "REFUNDED"
+  receipt          String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model Conversation {
+  id               String    @id @default(cuid())
+  listingId        String?
+  serviceId        String?
+  participantOneId String
+  participantTwoId String
+  lastMessage      String?
+  lastMessageAt    DateTime  @default(now())
+  messages         Message[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId    String
+  recipient      User         @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  content        String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model Review {
+  id               String          @id @default(cuid())
+  authorId         String
+  author           User            @relation("AuthoredReviews", fields: [authorId], references: [id], onDelete: Cascade)
+  targetUserId     String
+  targetUser       User            @relation("TargetReviews", fields: [targetUserId], references: [id], onDelete: Cascade)
+  listingId        String?
+  listing          Listing?        @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  serviceId        String?
+  service          Service?        @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  bookingId        String?         @unique
+  booking          Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  serviceBookingId String?         @unique
+  serviceBooking   ServiceBooking? @relation(fields: [serviceBookingId], references: [id], onDelete: SetNull)
+  rating           Int             // 1 to 5
+  comment          String
+  createdAt        DateTime        @default(now())
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listingId String?
+  listing   Listing? @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  link      String?
+  type      String   // "BOOKING_REQUEST" | "BOOKING_ACCEPTED" | "PAYMENT_RECEIVED" | "MESSAGE" | "REVIEW" | "SYSTEM"
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Dispute {
+  id           String   @id @default(cuid())
+  bookingId    String
+  booking      Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  initiatorId  String
+  reason       String
+  description  String
+  status       String   @default("OPEN") // "OPEN" | "UNDER_REVIEW" | "RESOLVED" | "DISMISSED"
+  resolution   String?
+  resolvedById String?
+  resolvedBy   User?    @relation("AdminDisputes", fields: [resolvedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reporter    User     @relation("ReporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType  String   // "LISTING" | "SERVICE" | "USER"
+  targetId    String
+  reason      String
+  details     String
+  status      String   @default("PENDING") // "PENDING" | "REVIEWED" | "DISMISSED"
+  createdAt   DateTime @default(now())
+}
