@@ -4,19 +4,30 @@ import prisma from '@/lib/prisma';
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
-  const [categories, listings, services] = await Promise.all([
-    prisma.category.findMany({ select: { slug: true } }),
-    prisma.listing.findMany({
-      where: { status: 'ACTIVE' },
-      select: { slug: true, updatedAt: true },
-      take: 100,
-    }),
-    prisma.service.findMany({
-      where: { status: 'ACTIVE' },
-      select: { slug: true, updatedAt: true },
-      take: 100,
-    }),
-  ]);
+  let categories: { slug: string }[] = [];
+  let listings: { slug: string; updatedAt: Date }[] = [];
+  let services: { slug: string; updatedAt: Date }[] = [];
+
+  try {
+    const res = await Promise.all([
+      prisma.category.findMany({ select: { slug: true } }),
+      prisma.listing.findMany({
+        where: { status: 'ACTIVE' },
+        select: { slug: true, updatedAt: true },
+        take: 100,
+      }),
+      prisma.service.findMany({
+        where: { status: 'ACTIVE' },
+        select: { slug: true, updatedAt: true },
+        take: 100,
+      }),
+    ]);
+    categories = res[0];
+    listings = res[1];
+    services = res[2];
+  } catch (error) {
+    console.warn('Sitemap dynamic routes fetch fallback during build:', error);
+  }
 
   const staticRoutes = [
     '',

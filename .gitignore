@@ -22,12 +22,13 @@ dist
 .env.test.local
 .env.production.local
 
-# Local SQLite databases & journals
+# Local SQLite databases & journals (dev.db tracked so Vercel build succeeds out of the box)
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
-prisma/*.db
+!prisma/dev.db
+*.db-journal
 prisma/*.db-journal
 
 # Uploaded media (local dev runtime storage)

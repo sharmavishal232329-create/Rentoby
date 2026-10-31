@@ -25,46 +25,54 @@ import HeroSearch from '@/components/home/HeroSearch';
 export const revalidate = 60; // ISR cache revalidation
 
 export default async function HomePage() {
-  // Fetch real featured listings from database
-  const featuredListings = await prisma.listing.findMany({
-    where: { status: 'ACTIVE' },
-    include: {
-      category: true,
-      owner: {
-        select: { name: true, isVerified: true, city: true, localArea: true },
+  let featuredListings: any[] = [];
+  let agriListings: any[] = [];
+  let featuredServices: any[] = [];
+
+  try {
+    // Fetch real featured listings from database
+    featuredListings = await prisma.listing.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        category: true,
+        owner: {
+          select: { name: true, isVerified: true, city: true, localArea: true },
+        },
       },
-    },
-    take: 6,
-    orderBy: { createdAt: 'desc' },
-  });
+      take: 6,
+      orderBy: { createdAt: 'desc' },
+    });
 
-  // Fetch real agriculture listings
-  const agriCategory = await prisma.category.findUnique({
-    where: { slug: 'agriculture' },
-  });
+    // Fetch real agriculture listings
+    const agriCategory = await prisma.category.findUnique({
+      where: { slug: 'agriculture' },
+    });
 
-  const agriListings = agriCategory
-    ? await prisma.listing.findMany({
+    if (agriCategory) {
+      agriListings = await prisma.listing.findMany({
         where: { categoryId: agriCategory.id, status: 'ACTIVE' },
         include: {
           category: true,
           owner: { select: { name: true, isVerified: true, localArea: true } },
         },
         take: 3,
-      })
-    : [];
+      });
+    }
 
-  // Fetch real services from database
-  const featuredServices = await prisma.service.findMany({
-    where: { status: 'ACTIVE' },
-    include: {
-      category: true,
-      provider: {
-        select: { name: true, isVerified: true, city: true, localArea: true },
+    // Fetch real services from database
+    featuredServices = await prisma.service.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        category: true,
+        provider: {
+          select: { name: true, isVerified: true, city: true, localArea: true },
+        },
       },
-    },
-    take: 3,
-  });
+      take: 3,
+    });
+  } catch (error) {
+    console.warn('Database query during build/export fallback:', error);
+  }
 
   const mainCategories = [
     { name: 'Agriculture', icon: Tractor, slug: 'agriculture', count: 'Tractors, Pumps, Tools', color: 'emerald' },
